@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/* ── Theme customization ── */
+@theme {
+  --font-sans: "Outfit", "Inter", system-ui, -apple-system, sans-serif;
+
+  /* Brand gradient stops */
+  --color-brand-pink: #e840a0;
+  --color-brand-purple: #7c3aed;
+  --color-brand-violet: #a855f7;
+  --color-brand-yellow: #ffe500;
+  --color-brand-orange: #f97316;
+  --color-brand-cyan: #38bdf8;
+  
+  --color-brand-purple-200: #c4b5fd;
+--color-brand-purple-300: #a78bfa;
+--color-brand-purple-400: #8b5cf6;
+--color-brand-purple-500: #7c3aed; /* base */
+--color-brand-purple-600: #6d28d9;
+--color-brand-purple-700: #5b21b6;
+
+--color-brand-pink-200: #f6a6d1;
+--color-brand-pink-300: #f077bd;
+--color-brand-pink-400: #eb5aac;
+--color-brand-pink-500: #e840a0; /* base */
+--color-brand-pink-600: #c9338a;
+--color-brand-pink-700: #a82773;
+
+}
+
+/* ── Base styles ── */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: #858383;
+    color: var(--color-gray-900);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    line-height: 1.2;
+    font-weight: 600;
+  }
+}

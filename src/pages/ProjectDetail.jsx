@@ -1,0 +1,603 @@
+import { useState, useEffect } from 'react'
+import { useParams, Link } from 'react-router-dom'
+import ReactionBar from '../components/ReactionBar'
+import { projects, comments, parents, auth } from '../services'
+
+/**
+ * Extract Google Drive file ID from URL
+ */
+function extractDriveFileId(driveUrl) {
+  if (!driveUrl) return null
+  
+  const fileMatch = driveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)
+  if (!fileMatch) return null
+  
+  return fileMatch[1]
+}
+
+/**
+ * Generate Google Drive thumbnail URL
+ */
+function getDriveThumbnail(driveUrl) {
+  const fileId = extractDriveFileId(driveUrl)
+  if (!fileId) return null
+  
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w300`
+}
+
+/**
+ * Generate Google Drive embeddable video URL
+ */
+function getDriveEmbedUrl(driveUrl) {
+  const fileId = extractDriveFileId(driveUrl)
+  if (!fileId) return null
+  
+  return `https://drive.google.com/file/d/${fileId}/preview`
+}
+
+function ProjectDetail() {
+  const { id } = useParams()
+  
+  // Project state (includes comments)
+  const [project, setProject] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  // Comment form state
+  const [showCommentForm, setShowCommentForm] = useState(false)
+  const [commentStep, setCommentStep] = useState(1) // 1: phone/email, 2: username, 3: predefined comments
+  const [parentContact, setParentContact] = useState('')
+  const [username, setUsername] = useState('')
+  const [selectedComment, setSelectedComment] = useState('')
+  const [isCreatingParent, setIsCreatingParent] = useState(false)
+
+  // Predefined comment options
+  const predefinedComments = [
+    "That is so Cool",
+    "Awesome!!",
+    "I wanna make that too!",
+    "I know how to make it : )",
+    "This is amazing!",
+    "Great work!",
+    "Love it!",
+    "Super creative!"
+  ]
+
+  // Fetch project data with cache
+  useEffect(() => {
+    // Check cache first
+    const cachedProject = localStorage.getItem(`project_${id}`)
+
+    if (cachedProject) {
+      setProject(JSON.parse(cachedProject))
+      setLoading(false) // kill spinner early 💀
+    }
+
+    // Fetch fresh data in background
+    fetchData()
+  }, [id])
+  
+  async function fetchData() {
+    setError(null)
+
+    try {
+      // Fetch project (includes comments and related projects)
+      const projectData = await projects.getProjectDetail(id)
+
+      setProject(projectData)
+
+      // Update cache
+      localStorage.setItem(`project_${id}`, JSON.stringify(projectData))
+    } catch (err) {
+      console.error('Failed to load project:', err)
+      
+      // If project fetch fails, show error
+      if (err.status === 404) {
+        setError(err.getUserMessage ? err.getUserMessage() : 'Project not found')
+      } else {
+        setError(err.getUserMessage ? err.getUserMessage() : 'Failed to load project')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Refresh project data after reaction update
+  async function handleReactionUpdate() {
+    try {
+      const updated = await projects.getProjectDetail(id)
+      setProject(updated)
+      // Update cache
+      localStorage.setItem(`project_${id}`, JSON.stringify(updated))
+    } catch (err) {
+      console.error('Failed to refresh project:', err)
+    }
+  }
+
+  // Handle comment form steps
+  function handleAddCommentClick() {
+    setShowCommentForm(true)
+    
+    // Check if user is already authenticated
+    const isAuth = auth.isAuthenticated()
+    const parentInfo = auth.getParentInfo()
+    
+    if (isAuth && parentInfo) {
+      // Skip to comment selection if already authenticated
+      setUsername(parentInfo.name)
+      setCommentStep(3)
+    } else {
+      // Start from step 1 for new users
+      setCommentStep(1)
+    }
+  }
+
+  function handleParentContactSubmit(e) {
+    e.preventDefault()
+    if (parentContact.trim()) {
+      setCommentStep(2)
+    }
+  }
+
+  async function handleUsernameSubmit(e) {
+    e.preventDefault()
+    if (!username.trim()) return
+
+    setIsCreatingParent(true)
+
+    try {
+      // Determine if parentContact is email or phone
+      const isEmail = parentContact.includes('@')
+      
+      // Create parent account
+      const parentData = {
+        name: username,
+        ...(isEmail ? { email: parentContact } : { phone_number: parentContact })
+      }
+
+      const response = await parents.createParent(parentData)
+      
+      // Verify token was saved
+      if (response.jwt_token) {
+        console.log('✅ Parent account created and JWT token saved')
+      }
+
+      // Move to step 3 (predefined comments)
+      setCommentStep(3)
+    } catch (err) {
+      console.error('❌ Failed to create parent account:', err)
+      
+      // Check for specific error messages
+      const errorMessage = err.getUserMessage ? err.getUserMessage() : 'Failed to create account. Please try again.'
+      
+      // Check if it's a duplicate account error
+      if (err.status === 400 && errorMessage.includes('already exists')) {
+        alert('This email/phone is already registered. If you have an account, your comment will use that account.')
+        // Still proceed to comment selection since they might be authenticated
+        setCommentStep(3)
+      } else {
+        alert(errorMessage)
+      }
+    } finally {
+      setIsCreatingParent(false)
+    }
+  }
+
+  async function handleCommentSubmit(comment) {
+    try {
+      // Check if authenticated
+      if (!auth.isAuthenticated()) {
+        alert('Please complete the registration to comment.')
+        setCommentStep(1)
+        return
+      }
+
+      // Check if token is expired
+      if (auth.isTokenExpired()) {
+        alert('Your session has expired. Please register again.')
+        auth.clearAuthToken()
+        setCommentStep(1)
+        return
+      }
+
+      // Get current username from parent info or state
+      const parentInfo = auth.getParentInfo()
+      const currentUsername = parentInfo?.name || username
+
+      // Submit comment to API (JWT token automatically attached by interceptor)
+      await comments.addComment({
+        project_id: parseInt(id),
+        username: currentUsername,
+        text: comment
+      })
+
+      console.log('✅ Comment submitted successfully')
+
+      // Reset form
+      setShowCommentForm(false)
+      setCommentStep(1)
+      setParentContact('')
+      setUsername('')
+      setSelectedComment('')
+
+      // Refresh project data to show new comment
+      await fetchData()
+    } catch (err) {
+      console.error('❌ Failed to submit comment:', err)
+      
+      // Handle 401 authentication errors
+      if (err.status === 401) {
+        alert('Your session has expired. Please register again.')
+        auth.clearAuthToken()
+        setCommentStep(1)
+      } else {
+        alert(err.getUserMessage ? err.getUserMessage() : 'Failed to submit comment. Please try again.')
+      }
+    }
+  }
+
+  function closeCommentForm() {
+    setShowCommentForm(false)
+    setCommentStep(1)
+    setParentContact('')
+    setUsername('')
+    setSelectedComment('')
+  }
+
+  // Refresh comments after adding or deleting
+  async function refreshComments() {
+    setCommentsError(null)
+    setCommentsLoading(true)
+
+    try {
+      const data = await comments.listComments({ project_id: id })
+      setProjectComments(data.results || [])
+      // Update cache
+      localStorage.setItem(`comments_${id}`, JSON.stringify(data.results || []))
+    } catch (err) {
+      console.error('Failed to refresh comments:', err)
+      setCommentsError(err.getUserMessage ? err.getUserMessage() : 'Failed to load comments')
+    } finally {
+      setCommentsLoading(false)
+    }
+  }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="inline-block w-12 h-12 border-4 border-brand-purple border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-gray-500">Loading project...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error || !project) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center max-w-md p-6">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Oops!</h2>
+          <p className="text-gray-600 mb-4">{error || 'Project not found'}</p>
+          <Link
+            to="/"
+            className="inline-block px-4 py-2 bg-brand-purple text-white rounded-full hover:opacity-90 transition-opacity"
+          >
+            Back to Home
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-gray-50 min-h-screen">
+      <div className="max-w-[1200px] mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="flex flex-col lg:flex-row gap-6">
+          
+          {/* ── Main Content Column ── */}
+          <div className="flex-1 min-w-0">
+            
+            {/* Title & Course Name */}
+            <div className="mb-4">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">
+                {project.project_title || project.title}
+              </h1>
+              <p className="text-sm text-gray-600">
+                Project Made on {project.course_name || 'JetLearn'}
+              </p>
+            </div>
+
+            {/* Video Player */}
+            <div className="w-full aspect-video bg-white rounded-2xl overflow-hidden shadow-lg relative mb-4">
+              {getDriveEmbedUrl(project.project_video_recording) ? (
+                <iframe
+                  src={getDriveEmbedUrl(project.project_video_recording)}
+                  className="w-full h-full"
+                  allow="autoplay"
+                  allowFullScreen
+                  title={project.project_title || 'Project Video'}
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-gray-400 bg-gray-100">
+                  <svg className="w-20 h-20" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                  </svg>
+                  <span className="text-sm">No video available</span>
+                </div>
+              )}
+            </div>
+            {/* <VideoPlayer project={project} /> */}
+            {/* Project Info & Reactions */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    {project.project_title || project.title}
+                  </h2>
+                  <p className="text-sm text-gray-600 mt-0.5">
+                    by {project.learner_name || project.creator_name || 'Anonymous'}
+                  </p>
+                </div>
+
+                {/* Reactions */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <ReactionBar
+                    projectId={project.id}
+                    counts={project.reactions_breakdown || {}}
+                    onReactionUpdate={handleReactionUpdate}
+                  />
+                </div>
+              </div>
+
+              {/* View Details Dropdown */}
+              <button className="flex items-center gap-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition-colors">
+                View Details
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Comments Section */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-gray-900">
+                  {project.total_comments || 0} Comments 💬
+                </h3>
+                <button 
+                  onClick={handleAddCommentClick}
+                  className="px-4 py-2 bg-brand-yellow text-gray-900 font-semibold text-sm rounded-full hover:opacity-90 transition-opacity"
+                >
+                  Add a Comment
+                </button>
+              </div>
+
+              {/* Multi-step Comment Form */}
+              {showCommentForm && (
+                <div className="mb-6 bg-gray-50 border-2 border-gray-300 rounded-2xl p-6 relative">
+                  {/* Close button */}
+                  <button
+                    onClick={closeCommentForm}
+                    className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition-colors"
+                    aria-label="Close"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+
+                  {/* Step 1: Parent Contact */}
+                  {commentStep === 1 && (
+                    <form onSubmit={handleParentContactSubmit} className="text-center">
+                      <h4 className="text-lg font-bold text-gray-900 mb-4">
+                        Enter Parent Phone/Email to continue
+                      </h4>
+                      <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow-sm">
+                        <input
+                          type="text"
+                          value={parentContact}
+                          onChange={(e) => setParentContact(e.target.value)}
+                          placeholder="Phone or Email"
+                          className="flex-1 outline-none text-sm"
+                          required
+                        />
+                        <button
+                          type="submit"
+                          className="text-gray-900 hover:text-gray-700 transition-colors"
+                        >
+                          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Step 2: Username */}
+                  {commentStep === 2 && (
+                    <form onSubmit={handleUsernameSubmit} className="text-center">
+                      <h4 className="text-lg font-bold text-gray-900 mb-4">
+                        What should we call you?
+                      </h4>
+                      <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow-sm">
+                        <input
+                          type="text"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          placeholder="Enter Username"
+                          className="flex-1 outline-none text-sm text-gray-500 placeholder:text-gray-400"
+                          required
+                          disabled={isCreatingParent}
+                        />
+                        <button
+                          type="submit"
+                          disabled={isCreatingParent}
+                          className="text-gray-900 hover:text-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isCreatingParent ? (
+                            <div className="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Step 3: Predefined Comments */}
+                  {commentStep === 3 && (
+                    <div>
+                      <h4 className="text-lg font-bold text-gray-900 mb-4 text-center">
+                        Choose a comment
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                        {predefinedComments.map((comment, index) => (
+                          <button
+                            key={index}
+                            onClick={() => setSelectedComment(comment)}
+                            className={`
+                              border-2 rounded-2xl px-4 py-3 text-sm transition-all text-left
+                              ${selectedComment === comment
+                                ? 'bg-brand-yellow border-brand-orange font-semibold shadow-md'
+                                : 'bg-white hover:bg-gray-50 border-gray-200'
+                              }
+                            `}
+                          >
+                            {comment}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Submit Button */}
+                      <button
+                        onClick={() => handleCommentSubmit(selectedComment)}
+                        disabled={!selectedComment}
+                        className="w-full bg-brand-yellow text-gray-900 font-bold text-base py-3 rounded-full shadow-md hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Submit Comment
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Comments List */}
+              <div className="space-y-3">
+                {(project.comments || []).length > 0 ? (
+                  project.comments.map((comment) => (
+                    <div key={comment.id} className="flex items-start gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-bold text-gray-900 text-sm">
+                            {comment.username || 'Anonymous'}
+                          </span>
+                        </div>
+                        <div className="bg-gray-100 rounded-2xl px-4 py-2.5">
+                          <p className="text-sm text-gray-800">
+                            {comment.text}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-gray-400">
+                      No comments yet. Be the first to comment!
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Right Sidebar ── */}
+          <aside className="lg:w-72 shrink-0">
+            <div className="sticky top-4 space-y-4">
+              
+              {/* CTA Button */}
+              <button className="w-full bg-brand-yellow text-gray-900 font-bold text-base px-6 py-3 rounded-full shadow-md hover:opacity-90 transition-opacity flex items-center justify-between">
+                <span>I want to Learn this Too!</span>
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+
+              {/* Related Projects */}
+              <div className="bg-gray-100 rounded-2xl p-4">
+                <p className="text-sm font-semibold text-gray-900 mb-3">
+                  <span className="font-bold">Related To: </span>
+                  <span className="text-gray-700">
+                    {project.course_name || 'AI enabled Mobile Apps and Games'}
+                  </span>
+                </p>
+
+                <div className="space-y-3">
+                  {(project.related_projects || []).length > 0 ? (
+                    project.related_projects.map((rp) => (
+                      <Link
+                        key={rp.id}
+                        to={`/project/${rp.id}`}
+                        className="flex items-center gap-3 group"
+                      >
+                        {/* Thumbnail with red dot */}
+                        <div className="relative w-20 h-20 bg-white rounded-xl overflow-hidden shrink-0 border-2 border-gray-200">
+                          {getDriveThumbnail(rp.project_video_recording) ? (
+                            <img
+                              src={getDriveThumbnail(rp.project_video_recording)}
+                              alt={rp.project_title}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                              <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                              </svg>
+                            </div>
+                          )}
+                          {/* Purple "projects available" label */}
+                          <div className="absolute -left-1 top-1/2 -translate-y-1/2 -rotate-90 origin-left">
+                            <span className="text-[9px] font-bold text-brand-purple whitespace-nowrap">
+                              {rp.course_name?.substring(0, 20) || 'Projects'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-gray-900 group-hover:text-brand-purple transition-colors line-clamp-2">
+                            {rp.project_title}
+                          </p>
+                        </div>
+                      </Link>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">
+                      No related projects yet
+                    </p>
+                  )}
+                </div>
+
+                {/* View All Button */}
+                <button className="w-full mt-4 bg-brand-yellow text-gray-900 font-bold text-sm px-4 py-2.5 rounded-full hover:opacity-90 transition-opacity flex items-center justify-between">
+                  <span>View All Projects</span>
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default ProjectDetail
