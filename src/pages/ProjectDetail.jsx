@@ -92,21 +92,33 @@ function ProjectDetail() {
   }
 
   // Handle comment form steps
-  function handleAddCommentClick() {
+  async function handleAddCommentClick() {
     setShowCommentForm(true)
-    
-    // Check if user is already authenticated
+
     const isAuth = auth.isAuthenticated()
+    const tokenValid = isAuth && !auth.isTokenExpired()
     const parentInfo = auth.getParentInfo()
-    
-    if (isAuth && parentInfo) {
-      // Skip to comment selection if already authenticated
+
+    if (tokenValid && parentInfo) {
+      // Already have valid token – skip to comment selection
       setUsername(parentInfo.name)
       setCommentStep(3)
-    } else {
-      // Start from step 1 for new users
-      setCommentStep(1)
+      return
     }
+
+    // Token expired or not logged in but we have stored parent info – try to get new token without asking user
+    if (parentInfo) {
+      const reauthed = await parents.reauthenticateFromStoredParent()
+      if (reauthed) {
+        const updated = auth.getParentInfo()
+        setUsername(updated?.name || parentInfo.name)
+        setCommentStep(3)
+        return
+      }
+    }
+
+    // New user or re-auth failed – show form from step 1
+    setCommentStep(1)
   }
 
   function handleParentContactSubmit(e) {
@@ -227,14 +239,26 @@ function ProjectDetail() {
 
   // Learn request handlers
   async function handleLearnThisClick() {
-    // Check if user is authenticated
-    if (auth.isAuthenticated() && !auth.isTokenExpired()) {
-      // Submit learn request directly
+    const isAuth = auth.isAuthenticated()
+    const tokenValid = isAuth && !auth.isTokenExpired()
+    const parentInfo = auth.getParentInfo()
+
+    if (tokenValid) {
       await submitLearnRequest()
-    } else {
-      // Show form to collect parent details
-      setShowLearnRequestForm(true)
+      return
     }
+
+    // Token expired or not logged in – try to get new token from stored parent info (no form)
+    if (parentInfo) {
+      const reauthed = await parents.reauthenticateFromStoredParent()
+      if (reauthed) {
+        await submitLearnRequest()
+        return
+      }
+    }
+
+    // No stored parent or re-auth failed – show form
+    setShowLearnRequestForm(true)
   }
 
   async function submitLearnRequest() {
