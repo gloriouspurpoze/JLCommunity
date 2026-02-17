@@ -46,7 +46,7 @@ function Home() {
       // Fetch community projects (next 8 for the two grids)
       const communityData = await projects.listProjects({
         page: 1,
-        page_size: 8,
+        page_size: 12,
         ordering: '-created_at',
       })
 

@@ -1,39 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import ReactionBar from '../components/ReactionBar'
-import { projects, comments, parents, auth } from '../services'
-
-/**
- * Extract Google Drive file ID from URL
- */
-function extractDriveFileId(driveUrl) {
-  if (!driveUrl) return null
-  
-  const fileMatch = driveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)
-  if (!fileMatch) return null
-  
-  return fileMatch[1]
-}
-
-/**
- * Generate Google Drive thumbnail URL
- */
-function getDriveThumbnail(driveUrl) {
-  const fileId = extractDriveFileId(driveUrl)
-  if (!fileId) return null
-  
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w300`
-}
-
-/**
- * Generate Google Drive embeddable video URL
- */
-function getDriveEmbedUrl(driveUrl) {
-  const fileId = extractDriveFileId(driveUrl)
-  if (!fileId) return null
-  
-  return `https://drive.google.com/file/d/${fileId}/preview`
-}
+import { projects, comments, parents, auth, learnRequests } from '../services'
+import { getDriveThumbnail, getDriveEmbedUrl } from '../utils/thumbnails'
 
 function ProjectDetail() {
   const { id } = useParams()
@@ -50,6 +19,14 @@ function ProjectDetail() {
   const [username, setUsername] = useState('')
   const [selectedComment, setSelectedComment] = useState('')
   const [isCreatingParent, setIsCreatingParent] = useState(false)
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+
+  // Learn request state
+  const [showLearnRequestForm, setShowLearnRequestForm] = useState(false)
+  const [showLearnRequestSuccess, setShowLearnRequestSuccess] = useState(false)
+  const [learnRequestParentEmail, setLearnRequestParentEmail] = useState('')
+  const [learnRequestStudentName, setLearnRequestStudentName] = useState('')
+  const [isSubmittingLearnRequest, setIsSubmittingLearnRequest] = useState(false)
 
   // Predefined comment options
   const predefinedComments = [
@@ -151,7 +128,7 @@ function ProjectDetail() {
       
       // Create parent account
       const parentData = {
-        name: username,
+        username: username,
         ...(isEmail ? { email: parentContact } : { phone_number: parentContact })
       }
 
@@ -184,22 +161,24 @@ function ProjectDetail() {
   }
 
   async function handleCommentSubmit(comment) {
+    // Check if authenticated
+    if (!auth.isAuthenticated()) {
+      alert('Please complete the registration to comment.')
+      setCommentStep(1)
+      return
+    }
+
+    // Check if token is expired
+    if (auth.isTokenExpired()) {
+      alert('Your session has expired. Please register again.')
+      auth.clearAuthToken()
+      setCommentStep(1)
+      return
+    }
+
+    setIsSubmittingComment(true)
+
     try {
-      // Check if authenticated
-      if (!auth.isAuthenticated()) {
-        alert('Please complete the registration to comment.')
-        setCommentStep(1)
-        return
-      }
-
-      // Check if token is expired
-      if (auth.isTokenExpired()) {
-        alert('Your session has expired. Please register again.')
-        auth.clearAuthToken()
-        setCommentStep(1)
-        return
-      }
-
       // Get current username from parent info or state
       const parentInfo = auth.getParentInfo()
       const currentUsername = parentInfo?.name || username
@@ -233,6 +212,8 @@ function ProjectDetail() {
       } else {
         alert(err.getUserMessage ? err.getUserMessage() : 'Failed to submit comment. Please try again.')
       }
+    } finally {
+      setIsSubmittingComment(false)
     }
   }
 
@@ -242,6 +223,85 @@ function ProjectDetail() {
     setParentContact('')
     setUsername('')
     setSelectedComment('')
+  }
+
+  // Learn request handlers
+  async function handleLearnThisClick() {
+    // Check if user is authenticated
+    if (auth.isAuthenticated() && !auth.isTokenExpired()) {
+      // Submit learn request directly
+      await submitLearnRequest()
+    } else {
+      // Show form to collect parent details
+      setShowLearnRequestForm(true)
+    }
+  }
+
+  async function submitLearnRequest() {
+    setIsSubmittingLearnRequest(true)
+
+    try {
+      await learnRequests.createLearnRequest({
+        project_id: parseInt(id)
+      })
+
+      console.log('✅ Learn request submitted successfully')
+
+      // Close form if open
+      setShowLearnRequestForm(false)
+
+      // Show success message
+      setShowLearnRequestSuccess(true)
+
+      // Hide success message after 5 seconds
+      setTimeout(() => {
+        setShowLearnRequestSuccess(false)
+      }, 5000)
+    } catch (err) {
+      console.error('❌ Failed to submit learn request:', err)
+      alert(err.getUserMessage ? err.getUserMessage() : 'Failed to submit request. Please try again.')
+    } finally {
+      setIsSubmittingLearnRequest(false)
+    }
+  }
+
+  async function handleLearnRequestFormSubmit(e) {
+    e.preventDefault()
+    
+    if (!learnRequestParentEmail.trim() || !learnRequestStudentName.trim()) {
+      alert('Please fill in all fields')
+      return
+    }
+
+    setIsSubmittingLearnRequest(true)
+
+    try {
+      // Determine if email or phone
+      const isEmail = learnRequestParentEmail.includes('@')
+      
+      // Create parent account first
+      await parents.createParent({
+        name: learnRequestStudentName,
+        ...(isEmail ? { email: learnRequestParentEmail } : { phone_number: learnRequestParentEmail })
+      })
+
+      // Now submit learn request
+      await submitLearnRequest()
+
+      // Reset form
+      setLearnRequestParentEmail('')
+      setLearnRequestStudentName('')
+    } catch (err) {
+      console.error('❌ Failed to create parent or submit learn request:', err)
+      alert(err.getUserMessage ? err.getUserMessage() : 'Failed to submit request. Please try again.')
+      setIsSubmittingLearnRequest(false)
+    }
+  }
+
+  function closeLearnRequestForm() {
+    setShowLearnRequestForm(false)
+    setLearnRequestParentEmail('')
+    setLearnRequestStudentName('')
   }
 
   // Refresh comments after adding or deleting
@@ -382,7 +442,8 @@ function ProjectDetail() {
                   {/* Close button */}
                   <button
                     onClick={closeCommentForm}
-                    className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition-colors"
+                    disabled={isSubmittingComment}
+                    className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                     aria-label="Close"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -461,12 +522,14 @@ function ProjectDetail() {
                           <button
                             key={index}
                             onClick={() => setSelectedComment(comment)}
+                            disabled={isSubmittingComment}
                             className={`
                               border-2 rounded-2xl px-4 py-3 text-sm transition-all text-left
                               ${selectedComment === comment
                                 ? 'bg-brand-yellow border-brand-orange font-semibold shadow-md'
                                 : 'bg-white hover:bg-gray-50 border-gray-200'
                               }
+                              ${isSubmittingComment ? 'opacity-50 cursor-not-allowed' : ''}
                             `}
                           >
                             {comment}
@@ -477,10 +540,17 @@ function ProjectDetail() {
                       {/* Submit Button */}
                       <button
                         onClick={() => handleCommentSubmit(selectedComment)}
-                        disabled={!selectedComment}
-                        className="w-full bg-brand-yellow text-gray-900 font-bold text-base py-3 rounded-full shadow-md hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                        disabled={!selectedComment || isSubmittingComment}
+                        className="w-full bg-brand-yellow text-gray-900 font-bold text-base py-3 rounded-full shadow-md hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
-                        Submit Comment
+                        {isSubmittingComment ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+                            <span>Submitting...</span>
+                          </>
+                        ) : (
+                          'Submit Comment'
+                        )}
                       </button>
                     </div>
                   )}
@@ -522,12 +592,33 @@ function ProjectDetail() {
             <div className="sticky top-4 space-y-4">
               
               {/* CTA Button */}
-              <button className="w-full bg-brand-yellow text-gray-900 font-bold text-base px-6 py-3 rounded-full shadow-md hover:opacity-90 transition-opacity flex items-center justify-between">
-                <span>I want to Learn this Too!</span>
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
+              <button 
+                onClick={handleLearnThisClick}
+                disabled={isSubmittingLearnRequest}
+                className="w-full bg-brand-yellow text-gray-900 font-bold text-base px-6 py-3 rounded-full shadow-md hover:opacity-90 transition-opacity flex items-center justify-between disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span>{isSubmittingLearnRequest ? 'Submitting...' : 'I want to Learn this Too!'}</span>
+                {!isSubmittingLearnRequest && (
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                )}
+                {isSubmittingLearnRequest && (
+                  <div className="w-5 h-5 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+                )}
               </button>
+
+              {/* Success Message */}
+              {showLearnRequestSuccess && (
+                <div className="bg-green-50 border-2 border-green-500 rounded-2xl p-4 text-center animate-fade-in">
+                  <p className="text-sm font-semibold text-green-800 mb-1">
+                    We've Noted your learning request : )
+                  </p>
+                  <p className="text-xs text-green-700">
+                    We will connect your parent for the Same, Keep exploring.
+                  </p>
+                </div>
+              )}
 
               {/* Related Projects */}
               <div className="bg-gray-100 rounded-2xl p-4">
@@ -539,45 +630,57 @@ function ProjectDetail() {
                 </p>
 
                 <div className="space-y-3">
-                  {(project.related_projects || []).length > 0 ? (
-                    project.related_projects.map((rp) => (
-                      <Link
-                        key={rp.id}
-                        to={`/project/${rp.id}`}
-                        className="flex items-center gap-3 group"
-                      >
-                        {/* Thumbnail with red dot */}
-                        <div className="relative w-20 h-20 bg-white rounded-xl overflow-hidden shrink-0 border-2 border-gray-200">
-                          {getDriveThumbnail(rp.project_video_recording) ? (
-                            <img
-                              src={getDriveThumbnail(rp.project_video_recording)}
-                              alt={rp.project_title}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gray-50">
-                              <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                              </svg>
-                            </div>
-                          )}
-                          {/* Purple "projects available" label */}
-                          <div className="absolute -left-1 top-1/2 -translate-y-1/2 -rotate-90 origin-left">
-                            <span className="text-[9px] font-bold text-brand-purple whitespace-nowrap">
-                              {rp.course_name?.substring(0, 20) || 'Projects'}
-                            </span>
+                  {(project.related_projects || []).length > 0 ? 
+                    project.related_projects.map((rp) => {
+                      const thumbnailUrl = getDriveThumbnail(rp.project_video_recording, 300)
+                      console.log('🎬 Related project:', rp.project_title, '| Video URL:', rp.project_video_recording, '| Thumbnail:', thumbnailUrl)
+                      
+                      return (
+                        <Link
+                          key={rp.id}
+                          to={`/project/${rp.id}`}
+                          className="flex items-center gap-3 group"
+                        >
+                          <div className="relative w-20 h-20 bg-white rounded-xl overflow-hidden shrink-0 border-2 border-gray-200">
+                            {thumbnailUrl ? (
+                              <>
+                                <img
+                                  src={thumbnailUrl}
+                                  alt={rp.project_title}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    console.log('❌ Image failed to load:', thumbnailUrl)
+                                    e.target.style.display = 'none'
+                                    const parent = e.target.parentElement
+                                    const placeholder = parent?.querySelector('.fallback-placeholder')
+                                    if (placeholder) placeholder.style.display = 'flex'
+                                  }}
+                                />
+                                <div className="fallback-placeholder w-full h-full flex items-center justify-center bg-gray-50" style={{ display: 'none' }}>
+                                  <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                                  </svg>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                                <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                                </svg>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-gray-900 group-hover:text-brand-purple transition-colors line-clamp-2">
-                            {rp.project_title}
-                          </p>
-                        </div>
-                      </Link>
-                    ))
-                  ) : (
+                          
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-gray-900 group-hover:text-brand-purple transition-colors line-clamp-2">
+                              {rp.project_title}
+                            </p>
+                          </div>
+                        </Link>
+                      )
+                    })
+                   : (
                     <p className="text-sm text-gray-500 text-center py-4">
                       No related projects yet
                     </p>
@@ -585,17 +688,89 @@ function ProjectDetail() {
                 </div>
 
                 {/* View All Button */}
-                <button className="w-full mt-4 bg-brand-yellow text-gray-900 font-bold text-sm px-4 py-2.5 rounded-full hover:opacity-90 transition-opacity flex items-center justify-between">
-                  <span>View All Projects</span>
+                <Link to="/" className="w-full mt-4 bg-brand-yellow text-gray-900 font-bold text-sm px-4 py-2.5 rounded-full hover:opacity-90 transition-opacity flex items-center justify-between">
+                  <span>Back to All Projects</span>
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
-                </button>
+               </Link>
               </div>
             </div>
           </aside>
         </div>
       </div>
+
+      {/* Learn Request Form Modal */}
+      {showLearnRequestForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 relative shadow-2xl">
+            {/* Close button */}
+            <button
+              onClick={closeLearnRequestForm}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="Close"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h3 className="text-xl font-bold text-gray-900 mb-2">
+              I want to Learn this Too!
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Please provide parent/guardian contact details
+            </p>
+
+            <form onSubmit={handleLearnRequestFormSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Parent Email or Phone Number
+                </label>
+                <input
+                  type="text"
+                  value={learnRequestParentEmail}
+                  onChange={(e) => setLearnRequestParentEmail(e.target.value)}
+                  placeholder="parent@example.com or +1234567890"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none focus:border-brand-purple transition-colors"
+                  required
+                  disabled={isSubmittingLearnRequest}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Student Name
+                </label>
+                <input
+                  type="text"
+                  value={learnRequestStudentName}
+                  onChange={(e) => setLearnRequestStudentName(e.target.value)}
+                  placeholder="Enter student name"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none focus:border-brand-purple transition-colors"
+                  required
+                  disabled={isSubmittingLearnRequest}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmittingLearnRequest}
+                className="w-full bg-brand-yellow text-gray-900 font-bold text-base py-3 rounded-full shadow-md hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isSubmittingLearnRequest ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+                    <span>Submitting...</span>
+                  </>
+                ) : (
+                  'Submit Request'
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

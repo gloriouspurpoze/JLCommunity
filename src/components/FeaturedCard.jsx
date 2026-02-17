@@ -1,39 +1,13 @@
 import { Link } from 'react-router-dom'
-
-/**
- * Extract Google Drive file ID from various URL formats
- * @param {string} url - Google Drive URL
- * @returns {string|null} - File ID or null
- */
-function extractDriveFileId(url) {
-  if (!url) return null
-
-  // Format: https://drive.google.com/file/d/FILE_ID/view?usp=sharing
-  const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)
-  if (fileMatch) return fileMatch[1]
-
-  // Format: https://drive.google.com/open?id=FILE_ID
-  const openMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-  if (openMatch) return openMatch[1]
-
-  return null
-}
-
-/**
- * Get Google Drive thumbnail URL from video link
- * @param {string} driveUrl - Full Google Drive URL
- * @returns {string} - Thumbnail URL
- */
-function getDriveThumbnail(driveUrl) {
-  const fileId = extractDriveFileId(driveUrl)
-  if (!fileId) return null
-
-  // Use Google's thumbnail service for high quality
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`
-}
+import { getDriveThumbnail } from '../utils/thumbnails'
 
 function FeaturedCard({ id, title, category, emoji, likes, comments, videoUrl }) {
-  const thumbnailUrl = getDriveThumbnail(videoUrl)
+  const thumbnailUrl = getDriveThumbnail(videoUrl, 400)
+  
+  // Debug log
+  if (videoUrl) {
+    console.log('🌟 Featured project:', title, '| Thumbnail:', thumbnailUrl)
+  }
 
   return (
     <Link
@@ -43,12 +17,26 @@ function FeaturedCard({ id, title, category, emoji, likes, comments, videoUrl })
       {/* Video thumbnail or placeholder */}
       <div className="relative bg-gray-200 w-full h-32 sm:h-36 lg:h-40 rounded-t-2xl overflow-hidden">
         {thumbnailUrl ? (
-          <img
-            src={thumbnailUrl}
-            alt={title || 'Project preview'}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
+          <>
+            <img
+              src={thumbnailUrl}
+              alt={title || 'Project preview'}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              onError={(e) => {
+                console.log('❌ Featured image failed:', thumbnailUrl)
+                e.target.style.display = 'none'
+                const parent = e.target.parentElement
+                const placeholder = parent?.querySelector('.fallback-placeholder')
+                if (placeholder) placeholder.style.display = 'flex'
+              }}
+            />
+            <div className="fallback-placeholder w-full h-full flex items-center justify-center text-gray-400" style={{ display: 'none' }}>
+              <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+              </svg>
+            </div>
+          </>
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-400">
             <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 20 20">
