@@ -1,40 +1,13 @@
 import { Link } from 'react-router-dom'
-import VideoPlayer from './VideoPlayer'
-
-/**
- * Extract Google Drive file ID from various URL formats
- * @param {string} url - Google Drive URL
- * @returns {string|null} - File ID or null
- */
-function extractDriveFileId(url) {
-  if (!url) return null
-
-  // Format: https://drive.google.com/file/d/FILE_ID/view?usp=sharing
-  const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)
-  if (fileMatch) return fileMatch[1]
-
-  // Format: https://drive.google.com/open?id=FILE_ID
-  const openMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-  if (openMatch) return openMatch[1]
-
-  return null
-}
-
-/**
- * Get Google Drive thumbnail URL from video link
- * @param {string} driveUrl - Full Google Drive URL
- * @returns {string} - Thumbnail URL
- */
-function getDriveThumbnail(driveUrl) {
-  const fileId = extractDriveFileId(driveUrl)
-  if (!fileId) return null
-
-  // Use Google's thumbnail service for high quality
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`
-}
+import { getDriveThumbnail } from '../utils/thumbnails'
 
 function ProjectCard({ id, title, author, videoUrl }) {
-  const thumbnailUrl = getDriveThumbnail(videoUrl)
+  const thumbnailUrl = getDriveThumbnail(videoUrl, 400)
+
+  // Debug log
+  if (videoUrl) {
+    console.log('🏠 Community project:', title, '| Thumbnail:', thumbnailUrl)
+  }
 
   return (
     <Link
@@ -49,6 +22,10 @@ function ProjectCard({ id, title, author, videoUrl }) {
             alt={title || 'Project preview'}
             className="w-full h-full object-cover"
             loading="lazy"
+            onError={(e) => {
+              console.log('❌ Community card image failed:', thumbnailUrl)
+              e.target.style.display = 'none'
+            }}
           />
         )}
         
@@ -61,8 +38,6 @@ function ProjectCard({ id, title, author, videoUrl }) {
           </div>
         </div>
       </div>
-
-      {/* <VideoPlayer project={project} /> */}
 
       {/* Card body */}
       <div className="p-2.5 sm:p-3 flex flex-col gap-1.5">

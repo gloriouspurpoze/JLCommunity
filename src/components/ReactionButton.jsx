@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { reactions as reactionsService } from '../services'
 
 /**
@@ -16,6 +16,12 @@ function ReactionButton({
   const [localCount, setLocalCount] = useState(count)
   const [isProcessing, setIsProcessing] = useState(false)
   const [localActive, setLocalActive] = useState(isActive)
+
+  // Sync local state with props when they change (e.g., when navigating to a new project)
+  useEffect(() => {
+    setLocalCount(count)
+    setLocalActive(isActive)
+  }, [count, isActive, projectId])
 
   async function handleClick(e) {
     e.preventDefault() // Prevent navigation if inside a link
