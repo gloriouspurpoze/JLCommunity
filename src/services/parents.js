@@ -1,5 +1,5 @@
 import api from './api'
-import { setAuthToken, setParentInfo } from './auth'
+import { getParentInfo, setAuthToken, setParentInfo } from './auth'
 
 /**
  * Parents API
@@ -31,6 +31,43 @@ export async function createParent(data) {
   }
 
   return response
+}
+
+/**
+ * Try to get a new JWT using stored parent info (no user input).
+ * Use when token is expired but we have parent_info in localStorage.
+ * Sends stored email/phone + name to backend; backend must return 200 + jwt_token for existing user.
+ * @returns {Promise<boolean>} true if a new token was obtained and saved
+ */
+export async function reauthenticateFromStoredParent() {
+  const parentInfo = getParentInfo()
+  if (!parentInfo?.name || (!parentInfo.email && !parentInfo.phone_number)) {
+    return false
+  }
+
+  const payload = {
+    name: parentInfo.name,
+    ...(parentInfo.email
+      ? { email: parentInfo.email }
+      : { phone_number: parentInfo.phone_number }),
+  }
+
+  try {
+    const response = await api.post('/parents/', payload)
+    if (response?.jwt_token) {
+      setAuthToken(response.jwt_token)
+      setParentInfo({
+        uuid: response.uuid,
+        name: response.name,
+        email: response.email,
+        phone_number: response.phone_number,
+      })
+      return true
+    }
+  } catch (_) {
+    // Backend returned 400 / not found / etc. – user must re-enter or backend doesn't support re-auth
+  }
+  return false
 }
 
 /**
