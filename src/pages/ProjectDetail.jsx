@@ -12,8 +12,12 @@ function ProjectDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // Details toggle state
+  const [showDetails, setShowDetails] = useState(false)
+
   // Comment form state
   const [showCommentForm, setShowCommentForm] = useState(false)
+  const [showComments, setShowComments] = useState(true) // Comments expanded by default
   const [commentStep, setCommentStep] = useState(1) // 1: phone/email, 2: username, 3: predefined comments
   const [parentContact, setParentContact] = useState('')
   const [username, setUsername] = useState('')
@@ -26,6 +30,7 @@ function ProjectDetail() {
   const [showLearnRequestSuccess, setShowLearnRequestSuccess] = useState(false)
   const [learnRequestParentEmail, setLearnRequestParentEmail] = useState('')
   const [learnRequestStudentName, setLearnRequestStudentName] = useState('')
+  const [learnRequestUsername, setLearnRequestUsername] = useState('')
   const [isSubmittingLearnRequest, setIsSubmittingLearnRequest] = useState(false)
 
   // Predefined comment options
@@ -305,7 +310,8 @@ function ProjectDetail() {
       
       // Create parent account first
       await parents.createParent({
-        name: learnRequestStudentName,
+        child_name: learnRequestStudentName,
+        username: learnRequestUsername,
         ...(isEmail ? { email: learnRequestParentEmail } : { phone_number: learnRequestParentEmail })
       })
 
@@ -346,8 +352,8 @@ function ProjectDetail() {
     }
   }
 
-  // Loading state
-  if (loading) {
+  // Loading state - only show full page loader if no project data exists
+  if (loading && !project) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3">
@@ -358,8 +364,8 @@ function ProjectDetail() {
     )
   }
 
-  // Error state
-  if (error || !project) {
+  // Error state - only show full page error if no project data exists
+  if ((error || !project) && !project) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center max-w-md p-6">
@@ -377,9 +383,46 @@ function ProjectDetail() {
     )
   }
 
+  // If we don't have project data at this point, don't render the page
+  if (!project) {
+    return null
+  }
+
   return (
     <div className="bg-gray-50 min-h-screen">
       <div className="max-w-[1200px] mx-auto p-4 sm:p-6 lg:p-8">
+        {/* Error banner - show when error occurs but project data exists */}
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow-sm mb-6 animate-fadeIn">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-red-500 text-2xl">⚠️</span>
+                <div>
+                  <h3 className="text-sm font-semibold text-red-800">Failed to refresh project</h3>
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => fetchData()}
+                  className="px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-full hover:bg-red-600 transition-colors"
+                >
+                  Retry
+                </button>
+                <button
+                  onClick={() => setError(null)}
+                  className="p-2 text-red-500 hover:text-red-700 transition-colors"
+                  aria-label="Dismiss error"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row gap-6">
           
           {/* ── Main Content Column ── */}
@@ -437,21 +480,94 @@ function ProjectDetail() {
                 </div>
               </div>
 
-              {/* View Details Dropdown */}
-              <button className="flex items-center gap-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition-colors">
-                View Details
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              {/* View/Hide Details Toggle */}
+              <button 
+                onClick={() => setShowDetails(!showDetails)}
+                className="flex items-center gap-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition-colors"
+              >
+                {showDetails ? 'Hide Details' : 'View Details'}
+                <svg 
+                  className={`w-4 h-4 transition-transform ${showDetails ? 'rotate-180' : ''}`} 
+                  fill="currentColor" 
+                  viewBox="0 0 20 20"
+                >
                   <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
               </button>
+
+              {/* Expandable Details Section */}
+              {showDetails && (
+                <div className="mt-4 pt-4 border-t border-gray-200 space-y-3 animate-fadeIn">
+                  {/* Project Description (if available) */}
+                  {project.project_description && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Description</h4>
+                      <p className="text-sm text-gray-600">{project.project_description}</p>
+                    </div>
+                  )}
+
+                  {/* Course Name */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-1">Course</h4>
+                    <p className="text-sm text-gray-600">{project.course_name || 'JetLearn'}</p>
+                  </div>
+
+                  {/* Project Creation Date */}
+                  {project.date_of_project_creation && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Created On</h4>
+                      <p className="text-sm text-gray-600">
+                        {new Date(project.date_of_project_creation).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Total Reactions and Comments */}
+                  {/* <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Total Reactions</h4>
+                      <p className="text-sm text-gray-600">{project.total_reactions || 0}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Total Comments</h4>
+                      <p className="text-sm text-gray-600">{project.total_comments || 0}</p>
+                    </div>
+                  </div> */}
+
+                  {/* Learner Name */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-1">Created By</h4>
+                    <p className="text-sm text-gray-600">{project.learner_name || project.creator_name || 'Anonymous'}</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Comments Section */}
             <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-gray-900">
-                  {project.total_comments || 0} Comments 💬
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-gray-900">
+                    {project.total_comments || 0} Comments 💬
+                  </h3>
+                  <button
+                    onClick={() => setShowComments(!showComments)}
+                    className="text-gray-500 hover:text-gray-700 transition-colors p-1"
+                    title={showComments ? "Hide comments" : "Show comments"}
+                  >
+                    <svg 
+                      className={`w-5 h-5 transition-transform ${showComments ? 'rotate-180' : ''}`}
+                      fill="currentColor" 
+                      viewBox="0 0 20 20"
+                    >
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
                 <button 
                   onClick={handleAddCommentClick}
                   className="px-4 py-2 bg-brand-yellow text-gray-900 font-semibold text-sm rounded-full hover:opacity-90 transition-opacity"
@@ -460,8 +576,11 @@ function ProjectDetail() {
                 </button>
               </div>
 
-              {/* Multi-step Comment Form */}
-              {showCommentForm && (
+              {/* Collapsible Comments Content */}
+              {showComments && (
+                <div className="animate-fadeIn">
+                  {/* Multi-step Comment Form */}
+                  {showCommentForm && (
                 <div className="mb-6 bg-gray-50 border-2 border-gray-300 rounded-2xl p-6 relative">
                   {/* Close button */}
                   <button
@@ -581,39 +700,41 @@ function ProjectDetail() {
                 </div>
               )}
 
-              {/* Comments List */}
-              <div className="space-y-3">
-                {(project.comments || []).length > 0 ? (
-                  project.comments.map((comment) => (
-                    <div key={comment.id} className="flex items-start gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-bold text-gray-900 text-sm">
-                            {comment.username || 'Anonymous'}
-                          </span>
+                  {/* Comments List */}
+                  <div className="space-y-3">
+                    {(project.comments || []).length > 0 ? (
+                      project.comments.map((comment) => (
+                        <div key={comment.id} className="flex items-start gap-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-bold text-gray-900 text-sm">
+                                {comment.username || 'Anonymous'}
+                              </span>
+                            </div>
+                            <div className="bg-gray-100 rounded-2xl px-4 py-2.5">
+                              <p className="text-sm text-gray-800">
+                                {comment.text}
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                        <div className="bg-gray-100 rounded-2xl px-4 py-2.5">
-                          <p className="text-sm text-gray-800">
-                            {comment.text}
-                          </p>
-                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-sm text-gray-400">
+                          No comments yet. Be the first to comment!
+                        </p>
                       </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-gray-400">
-                      No comments yet. Be the first to comment!
-                    </p>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
 
           {/* ── Right Sidebar ── */}
           <aside className="lg:w-72 shrink-0">
-            <div className="sticky top-4 space-y-4">
+            <div className="sticky top-10 space-y-4">
               
               {/* CTA Button */}
               <button 
@@ -645,61 +766,109 @@ function ProjectDetail() {
               )}
 
               {/* Related Projects */}
-              <div className="bg-gray-100 rounded-2xl p-4">
-                <p className="text-sm font-semibold text-gray-900 mb-3">
+              <div className="bg-gray-100 rounded-2xl p-4 h-[65vh] overflow-y-auto">
+                <p className="text-sm font-semibold text-gray-900 mb-4">
                   <span className="font-bold">Related To: </span>
                   <span className="text-gray-700">
                     {project.course_name || 'AI enabled Mobile Apps and Games'}
                   </span>
                 </p>
 
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {(project.related_projects || []).length > 0 ? 
                     project.related_projects.map((rp) => {
-                      const thumbnailUrl = getDriveThumbnail(rp.project_video_recording, 300)
+                      const thumbnailUrl = getDriveThumbnail(rp.project_video_recording, 400)
                       console.log('🎬 Related project:', rp.project_title, '| Video URL:', rp.project_video_recording, '| Thumbnail:', thumbnailUrl)
                       
                       return (
                         <Link
                           key={rp.id}
                           to={`/project/${rp.id}`}
-                          className="flex items-center gap-3 group"
+                          className="block group"
                         >
-                          <div className="relative w-20 h-20 bg-white rounded-xl overflow-hidden shrink-0 border-2 border-gray-200">
-                            {thumbnailUrl ? (
-                              <>
-                                <img
-                                  src={thumbnailUrl}
-                                  alt={rp.project_title}
-                                  className="w-full h-full object-cover"
-                                  loading="lazy"
-                                  onError={(e) => {
-                                    console.log('❌ Image failed to load:', thumbnailUrl)
-                                    e.target.style.display = 'none'
-                                    const parent = e.target.parentElement
-                                    const placeholder = parent?.querySelector('.fallback-placeholder')
-                                    if (placeholder) placeholder.style.display = 'flex'
-                                  }}
-                                />
-                                <div className="fallback-placeholder w-full h-full flex items-center justify-center bg-gray-50" style={{ display: 'none' }}>
+                          {/* Mobile: Full width card with large thumbnail */}
+                          <div className="lg:hidden bg-white rounded-xl overflow-hidden border-2 border-gray-200 hover:border-brand-purple transition-colors">
+                            <div className="relative w-full aspect-video bg-gray-50">
+                              {thumbnailUrl ? (
+                                <>
+                                  <img
+                                    src={thumbnailUrl}
+                                    alt={rp.project_title}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                    crossOrigin="anonymous"
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      console.log('❌ Image failed to load:', thumbnailUrl)
+                                      e.target.style.display = 'none'
+                                      const parent = e.target.parentElement
+                                      const placeholder = parent?.querySelector('.fallback-placeholder')
+                                      if (placeholder) placeholder.style.display = 'flex'
+                                    }}
+                                  />
+                                  <div className="fallback-placeholder w-full h-full flex items-center justify-center bg-gray-50 absolute inset-0" style={{ display: 'none' }}>
+                                    <svg className="w-12 h-12 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                                      <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                                    </svg>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <svg className="w-12 h-12 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-3">
+                              <p className="text-sm font-bold text-gray-900 group-hover:text-brand-purple transition-colors line-clamp-2">
+                                {rp.project_title}
+                              </p>
+                              <p className="text-xs text-gray-600 mt-1">by {rp.learner_name}</p>
+                            </div>
+                          </div>
+
+                          {/* Desktop: Horizontal card with larger thumbnail */}
+                          <div className="hidden lg:flex items-start gap-3 bg-white rounded-xl p-2 border-2 border-gray-200 hover:border-brand-purple transition-colors">
+                            <div className="relative w-32 h-20 bg-gray-50 rounded-lg overflow-hidden shrink-0">
+                              {thumbnailUrl ? (
+                                <>
+                                  <img
+                                    src={thumbnailUrl}
+                                    alt={rp.project_title}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                    crossOrigin="anonymous"
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      console.log('❌ Image failed to load:', thumbnailUrl)
+                                      e.target.style.display = 'none'
+                                      const parent = e.target.parentElement
+                                      const placeholder = parent?.querySelector('.fallback-placeholder')
+                                      if (placeholder) placeholder.style.display = 'flex'
+                                    }}
+                                  />
+                                  <div className="fallback-placeholder w-full h-full flex items-center justify-center bg-gray-50 absolute inset-0" style={{ display: 'none' }}>
+                                    <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                                      <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                                    </svg>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
                                   <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
                                   </svg>
                                 </div>
-                              </>
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-gray-50">
-                                <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                                  <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                                </svg>
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-gray-900 group-hover:text-brand-purple transition-colors line-clamp-2">
-                              {rp.project_title}
-                            </p>
+                              )}
+                            </div>
+                            
+                            <div className="flex-1 min-w-0 py-1">
+                              <p className="text-sm font-bold text-gray-900 group-hover:text-brand-purple transition-colors line-clamp-2 mb-1">
+                                {rp.project_title}
+                              </p>
+                              <p className="text-xs text-gray-600">by {rp.learner_name}</p>
+                            </div>
                           </div>
                         </Link>
                       )
@@ -711,14 +880,15 @@ function ProjectDetail() {
                   )}
                 </div>
 
-                {/* View All Button */}
-                <Link to="/" className="w-full mt-4 bg-brand-yellow text-gray-900 font-bold text-sm px-4 py-2.5 rounded-full hover:opacity-90 transition-opacity flex items-center justify-between">
+                
+              </div>
+              {/* View All Button */}
+              <Link to="/" className="w-full mt-4 bg-brand-yellow text-gray-900 font-bold text-sm px-4 py-2.5 rounded-full hover:opacity-90 transition-opacity flex items-center justify-between">
                   <span>Back to All Projects</span>
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
                </Link>
-              </div>
             </div>
           </aside>
         </div>
@@ -771,6 +941,21 @@ function ProjectDetail() {
                   value={learnRequestStudentName}
                   onChange={(e) => setLearnRequestStudentName(e.target.value)}
                   placeholder="Enter student name"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none focus:border-brand-purple transition-colors"
+                  required
+                  disabled={isSubmittingLearnRequest}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={learnRequestUsername}
+                  onChange={(e) => setLearnRequestUsername(e.target.value)}
+                  placeholder="Enter a Cool Username for you (eg: JohnDoe123)"
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none focus:border-brand-purple transition-colors"
                   required
                   disabled={isSubmittingLearnRequest}
