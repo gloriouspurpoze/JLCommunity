@@ -52,9 +52,9 @@ function ProjectCard({ id, title, author, videoUrl }) {
           </span>
         </div>
 
-        <span className="mt-1 self-start px-2.5 sm:px-3 py-1 text-[10px] font-semibold text-white bg-brand-orange rounded-full">
+        {/* <span className="mt-1 self-start px-2.5 sm:px-3 py-1 text-[10px] font-semibold text-white bg-brand-orange rounded-full">
           See Inside
-        </span>
+        </span> */}
       </div>
     </Link>
   )

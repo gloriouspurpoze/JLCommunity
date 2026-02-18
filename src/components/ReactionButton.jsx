@@ -72,17 +72,18 @@ function ReactionButton({
   return (
     <button
       onClick={handleClick}
-      disabled={isProcessing}
+      disabled={isProcessing || localActive}
       className={`
         inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm
         transition-all shadow-sm
         ${localActive 
-          ? 'bg-brand-yellow border-2 border-brand-orange scale-105' 
-          : 'bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+          ? 'bg-brand-yellow border-2 border-brand-orange scale-105 cursor-not-allowed' 
+          : 'bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 cursor-pointer'
         }
-        ${isProcessing ? 'opacity-60 cursor-wait' : 'cursor-pointer'}
+        ${isProcessing ? 'opacity-60 cursor-wait' : ''}
+        ${localActive && !isProcessing ? 'opacity-100' : ''}
       `}
-      title={`React with ${reactionType}`}
+      title={localActive ? `You reacted with ${reactionType}` : `React with ${reactionType}`}
     >
       <span className="text-lg">{emoji}</span>
       <span className="font-bold text-gray-900">{localCount}</span>
