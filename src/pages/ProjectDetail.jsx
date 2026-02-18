@@ -1,8 +1,34 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import ReactionBar from '../components/ReactionBar'
 import { projects, comments, parents, auth, learnRequests } from '../services'
 import { getDriveThumbnail, getDriveEmbedUrl } from '../utils/thumbnails'
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const PHONE_REGEX = /^\+?[\d\s\-().]{7,15}$/
+
+function isValidEmail(value) {
+  return EMAIL_REGEX.test(value.trim())
+}
+
+function isValidPhone(value) {
+  return PHONE_REGEX.test(value.trim())
+}
+
+function isValidContact(value) {
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  return isValidEmail(trimmed) || isValidPhone(trimmed)
+}
+
+function getContactError(value) {
+  const trimmed = value.trim()
+  if (!trimmed) return 'Please enter an email or phone number'
+  if (trimmed.includes('@')) {
+    return isValidEmail(trimmed) ? '' : 'Please enter a valid email (e.g. parent@example.com)'
+  }
+  return isValidPhone(trimmed) ? '' : 'Please enter a valid phone number or Email (e.g. +1234567890 or parent@example.com)'
+}
 
 function ProjectDetail() {
   const { id } = useParams()
@@ -20,18 +46,21 @@ function ProjectDetail() {
   const [showComments, setShowComments] = useState(true) // Comments expanded by default
   const [commentStep, setCommentStep] = useState(1) // 1: phone/email, 2: username, 3: predefined comments
   const [parentContact, setParentContact] = useState('')
+  const [contactError, setContactError] = useState('')
   const [username, setUsername] = useState('')
   const [selectedComment, setSelectedComment] = useState('')
   const [isCreatingParent, setIsCreatingParent] = useState(false)
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
 
   // Learn request state
+  const [learnContactError, setLearnContactError] = useState('')
   const [showLearnRequestForm, setShowLearnRequestForm] = useState(false)
   const [showLearnRequestSuccess, setShowLearnRequestSuccess] = useState(false)
   const [learnRequestParentEmail, setLearnRequestParentEmail] = useState('')
   const [learnRequestStudentName, setLearnRequestStudentName] = useState('')
   const [learnRequestUsername, setLearnRequestUsername] = useState('')
   const [isSubmittingLearnRequest, setIsSubmittingLearnRequest] = useState(false)
+  const [lastSubmittedLearnRequest, setLastSubmittedLearnRequest] = useState(null)
 
   // Predefined comment options
   const predefinedComments = [
@@ -44,6 +73,17 @@ function ProjectDetail() {
     "Love it!",
     "Super creative!"
   ]
+
+  // Scroll to top when navigating to a different project (layout uses overflow-y-auto, not window)
+  const rootRef = useRef(null)
+  useEffect(() => {
+    const scrollContainer = rootRef.current?.closest('.overflow-y-auto') ?? document.querySelector('.overflow-y-auto')
+    if (scrollContainer) {
+      scrollContainer.scrollTo({ top: 0, behavior: 'smooth' })
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [id])
 
   // Fetch project data with cache
   useEffect(() => {
@@ -128,9 +168,13 @@ function ProjectDetail() {
 
   function handleParentContactSubmit(e) {
     e.preventDefault()
-    if (parentContact.trim()) {
-      setCommentStep(2)
+    const err = getContactError(parentContact)
+    if (err) {
+      setContactError(err)
+      return
     }
+    setContactError('')
+    setCommentStep(2)
   }
 
   async function handleUsernameSubmit(e) {
@@ -238,6 +282,7 @@ function ProjectDetail() {
     setShowCommentForm(false)
     setCommentStep(1)
     setParentContact('')
+    setContactError('')
     setUsername('')
     setSelectedComment('')
   }
@@ -285,7 +330,7 @@ function ProjectDetail() {
       // Hide success message after 5 seconds
       setTimeout(() => {
         setShowLearnRequestSuccess(false)
-      }, 5000)
+      }, 10000)
     } catch (err) {
       console.error('❌ Failed to submit learn request:', err)
       alert(err.getUserMessage ? err.getUserMessage() : 'Failed to submit request. Please try again.')
@@ -302,6 +347,12 @@ function ProjectDetail() {
       return
     }
 
+    const err = getContactError(learnRequestParentEmail)
+    if (err) {
+      setLearnContactError(err)
+      return
+    }
+    setLearnContactError('')
     setIsSubmittingLearnRequest(true)
 
     try {
@@ -315,12 +366,15 @@ function ProjectDetail() {
         ...(isEmail ? { email: learnRequestParentEmail } : { phone_number: learnRequestParentEmail })
       })
 
+      // Save details to show in success (before submit)
+      setLastSubmittedLearnRequest({
+        parentEmail: learnRequestParentEmail.trim(),
+        studentName: learnRequestStudentName.trim(),
+        username: learnRequestUsername.trim()
+      })
+
       // Now submit learn request
       await submitLearnRequest()
-
-      // Reset form
-      setLearnRequestParentEmail('')
-      setLearnRequestStudentName('')
     } catch (err) {
       console.error('❌ Failed to create parent or submit learn request:', err)
       alert(err.getUserMessage ? err.getUserMessage() : 'Failed to submit request. Please try again.')
@@ -331,6 +385,7 @@ function ProjectDetail() {
   function closeLearnRequestForm() {
     setShowLearnRequestForm(false)
     setLearnRequestParentEmail('')
+    setLearnContactError('')
     setLearnRequestStudentName('')
   }
 
@@ -389,11 +444,11 @@ function ProjectDetail() {
   }
 
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div ref={rootRef} className="bg-gray-50 min-h-screen">
       <div className="max-w-[1200px] mx-auto p-4 sm:p-6 lg:p-8">
         {/* Error banner - show when error occurs but project data exists */}
         {error && (
-          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow-sm mb-6 animate-fadeIn">
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow-sm mb-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-red-500 text-2xl">⚠️</span>
@@ -497,7 +552,7 @@ function ProjectDetail() {
 
               {/* Expandable Details Section */}
               {showDetails && (
-                <div className="mt-4 pt-4 border-t border-gray-200 space-y-3 animate-fadeIn">
+                <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
                   {/* Project Description (if available) */}
                   {project.project_description && (
                     <div>
@@ -578,7 +633,7 @@ function ProjectDetail() {
 
               {/* Collapsible Comments Content */}
               {showComments && (
-                <div className="animate-fadeIn">
+                <div>
                   {/* Multi-step Comment Form */}
                   {showCommentForm && (
                 <div className="mb-6 bg-gray-50 border-2 border-gray-300 rounded-2xl p-6 relative">
@@ -600,12 +655,15 @@ function ProjectDetail() {
                       <h4 className="text-lg font-bold text-gray-900 mb-4">
                         Enter Parent Phone/Email to continue
                       </h4>
-                      <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow-sm">
+                      <div className={`flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow-sm ${contactError ? 'ring-2 ring-red-400' : ''}`}>
                         <input
                           type="text"
                           value={parentContact}
-                          onChange={(e) => setParentContact(e.target.value)}
-                          placeholder="Phone or Email"
+                          onChange={(e) => {
+                            setParentContact(e.target.value)
+                            if (contactError) setContactError('')
+                          }}
+                          placeholder="parent@example.com or +1234567890"
                           className="flex-1 outline-none text-sm"
                           required
                         />
@@ -618,6 +676,9 @@ function ProjectDetail() {
                           </svg>
                         </button>
                       </div>
+                      {contactError && (
+                        <p className="text-red-500 text-xs mt-2">{contactError}</p>
+                      )}
                     </form>
                   )}
 
@@ -755,13 +816,30 @@ function ProjectDetail() {
 
               {/* Success Message */}
               {showLearnRequestSuccess && (
-                <div className="bg-green-50 border-2 border-green-500 rounded-2xl p-4 text-center animate-fade-in">
+                <div className="bg-green-50 border-2 border-green-500 rounded-2xl p-4 text-center">
                   <p className="text-sm font-semibold text-green-800 mb-1">
                     We've Noted your learning request : )
                   </p>
-                  <p className="text-xs text-green-700">
+                  <p className="text-xs text-green-700 mb-3">
                     We will connect your parent for the Same, Keep exploring.
                   </p>
+                  {lastSubmittedLearnRequest && (
+                    <div className="text-left text-xs text-green-800 bg-green-100/60 rounded-xl p-3 mb-3 space-y-1">
+                      <p><span className="font-semibold">Parent contact:</span> {lastSubmittedLearnRequest.parentEmail}</p>
+                      <p><span className="font-semibold">Student name:</span> {lastSubmittedLearnRequest.studentName}</p>
+                      <p><span className="font-semibold">Username:</span> {lastSubmittedLearnRequest.username}</p>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLearnRequestSuccess(false)
+                      setShowLearnRequestForm(true)
+                    }}
+                    className="w-full text-sm font-semibold text-green-800 bg-green-200 hover:bg-green-300 py-2.5 rounded-full transition-colors"
+                  >
+                    Enter Details again
+                  </button>
                 </div>
               )}
 
@@ -920,12 +998,18 @@ function ProjectDetail() {
                 <input
                   type="text"
                   value={learnRequestParentEmail}
-                  onChange={(e) => setLearnRequestParentEmail(e.target.value)}
+                  onChange={(e) => {
+                    setLearnRequestParentEmail(e.target.value)
+                    if (learnContactError) setLearnContactError('')
+                  }}
                   placeholder="parent@example.com or +1234567890"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none focus:border-brand-purple transition-colors"
+                  className={`w-full px-4 py-3 border rounded-xl outline-none focus:border-brand-purple transition-colors ${learnContactError ? 'border-red-400' : 'border-gray-300'}`}
                   required
                   disabled={isSubmittingLearnRequest}
                 />
+                {learnContactError && (
+                  <p className="text-red-500 text-xs mt-1">{learnContactError}</p>
+                )}
               </div>
 
               <div>
