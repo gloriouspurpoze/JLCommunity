@@ -778,7 +778,13 @@ function ProjectDetail() {
                   {(project.related_projects || []).length > 0 ? 
                     project.related_projects.map((rp) => {
                       const thumbnailUrl = getDriveThumbnail(rp.project_video_recording, 400)
-                      console.log('🎬 Related project:', rp.project_title, '| Video URL:', rp.project_video_recording, '| Thumbnail:', thumbnailUrl)
+                      console.log('🎬 Related project:', {
+                        title: rp.project_title,
+                        videoUrl: rp.project_video_recording,
+                        thumbnailUrl: thumbnailUrl,
+                        hasVideoUrl: !!rp.project_video_recording,
+                        hasThumbnail: !!thumbnailUrl
+                      })
                       
                       return (
                         <Link
@@ -789,35 +795,30 @@ function ProjectDetail() {
                           {/* Mobile: Full width card with large thumbnail */}
                           <div className="lg:hidden bg-white rounded-xl overflow-hidden border-2 border-gray-200 hover:border-brand-purple transition-colors">
                             <div className="relative w-full aspect-video bg-gray-50">
-                              {thumbnailUrl ? (
-                                <>
-                                  <img
-                                    src={thumbnailUrl}
-                                    alt={rp.project_title}
-                                    className="w-full h-full object-cover"
-                                    loading="lazy"
-                                    crossOrigin="anonymous"
-                                    referrerPolicy="no-referrer"
-                                    onError={(e) => {
-                                      console.log('❌ Image failed to load:', thumbnailUrl)
-                                      e.target.style.display = 'none'
-                                      const parent = e.target.parentElement
-                                      const placeholder = parent?.querySelector('.fallback-placeholder')
-                                      if (placeholder) placeholder.style.display = 'flex'
-                                    }}
-                                  />
-                                  <div className="fallback-placeholder w-full h-full flex items-center justify-center bg-gray-50 absolute inset-0" style={{ display: 'none' }}>
-                                    <svg className="w-12 h-12 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                                      <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                                    </svg>
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <svg className="w-12 h-12 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                                  </svg>
-                                </div>
+                              {/* Always show placeholder, hide it on successful load */}
+                              <div className="fallback-placeholder w-full h-full flex items-center justify-center bg-gray-100 absolute inset-0">
+                                <svg className="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                                </svg>
+                              </div>
+                              {thumbnailUrl && (
+                                <img
+                                  src={thumbnailUrl}
+                                  alt={rp.project_title}
+                                  className="w-full h-full object-cover absolute inset-0 z-10"
+                                  loading="lazy"
+                                  onLoad={(e) => {
+                                    // Hide placeholder on successful load
+                                    const parent = e.target.parentElement
+                                    const placeholder = parent?.querySelector('.fallback-placeholder')
+                                    if (placeholder) placeholder.style.display = 'none'
+                                  }}
+                                  onError={(e) => {
+                                    console.log('❌ Mobile image failed to load:', thumbnailUrl)
+                                    // Just hide the broken image, placeholder already visible
+                                    e.target.style.display = 'none'
+                                  }}
+                                />
                               )}
                             </div>
                             <div className="p-3">
@@ -830,36 +831,31 @@ function ProjectDetail() {
 
                           {/* Desktop: Horizontal card with larger thumbnail */}
                           <div className="hidden lg:flex items-start gap-3 bg-white rounded-xl p-2 border-2 border-gray-200 hover:border-brand-purple transition-colors">
-                            <div className="relative w-32 h-20 bg-gray-50 rounded-lg overflow-hidden shrink-0">
-                              {thumbnailUrl ? (
-                                <>
-                                  <img
-                                    src={thumbnailUrl}
-                                    alt={rp.project_title}
-                                    className="w-full h-full object-cover"
-                                    loading="lazy"
-                                    crossOrigin="anonymous"
-                                    referrerPolicy="no-referrer"
-                                    onError={(e) => {
-                                      console.log('❌ Image failed to load:', thumbnailUrl)
-                                      e.target.style.display = 'none'
-                                      const parent = e.target.parentElement
-                                      const placeholder = parent?.querySelector('.fallback-placeholder')
-                                      if (placeholder) placeholder.style.display = 'flex'
-                                    }}
-                                  />
-                                  <div className="fallback-placeholder w-full h-full flex items-center justify-center bg-gray-50 absolute inset-0" style={{ display: 'none' }}>
-                                    <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                                      <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                                    </svg>
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                                  </svg>
-                                </div>
+                            <div className="relative w-32 h-20 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                              {/* Always show placeholder, hide it on successful load */}
+                              <div className="fallback-placeholder w-full h-full flex items-center justify-center bg-gray-100 absolute inset-0">
+                                <svg className="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                                </svg>
+                              </div>
+                              {thumbnailUrl && (
+                                <img
+                                  src={thumbnailUrl}
+                                  alt={rp.project_title}
+                                  className="w-full h-full object-cover absolute inset-0 z-10"
+                                  loading="lazy"
+                                  onLoad={(e) => {
+                                    // Hide placeholder on successful load
+                                    const parent = e.target.parentElement
+                                    const placeholder = parent?.querySelector('.fallback-placeholder')
+                                    if (placeholder) placeholder.style.display = 'none'
+                                  }}
+                                  onError={(e) => {
+                                    console.log('❌ Desktop image failed to load:', thumbnailUrl)
+                                    // Just hide the broken image, placeholder already visible
+                                    e.target.style.display = 'none'
+                                  }}
+                                />
                               )}
                             </div>
                             
