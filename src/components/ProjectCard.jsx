@@ -46,7 +46,7 @@ function ProjectCard({ id, title, author, videoUrl }) {
         </h3>
 
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gray-300 shrink-0" />
+          {/* <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gray-300 shrink-0" /> */}
           <span className="text-[10px] sm:text-xs text-gray-500 truncate">
             {author || 'Creator Name'}
           </span>

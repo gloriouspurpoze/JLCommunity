@@ -221,7 +221,7 @@ function Home() {
     <div className="flex flex-col gap-6 sm:gap-8 p-4 sm:p-6">
       {/* Error banner - show when error occurs but content exists */}
       {error && hasContent && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow-sm animate-fadeIn">
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-red-500 text-2xl">⚠️</span>
