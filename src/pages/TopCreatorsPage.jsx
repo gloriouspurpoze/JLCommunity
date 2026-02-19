@@ -1,71 +1,63 @@
 import { useState, useEffect } from 'react'
 import TopCreators from '../components/TopCreators'
-// import { parents } from '../services'
-
-// Dummy data until backend provides top creators endpoint
-const dummyCreators = [
-  { name: 'Alice', score: 56 },
-  { name: 'Bob', score: 54 },
-  { name: 'Claire', score: 35 },
-  { name: 'David', score: 31 },
-  { name: 'Emma', score: 28 },
-  { name: 'Frank', score: 25 },
-  { name: 'Grace', score: 22 },
-]
+import { leaderboard } from '../services'
 
 function TopCreatorsPage() {
   const [creators, setCreators] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [tab, setTab] = useState('week')
 
   useEffect(() => {
-    // Check cache first
-    const cached = localStorage.getItem('top_creators')
+    const cacheKey = tab === 'week' ? 'leaderboard_weekly' : 'leaderboard_all'
+    const cached = localStorage.getItem(cacheKey)
 
     if (cached) {
       setCreators(JSON.parse(cached))
-      setLoading(false) // kill spinner early 💀
+      setLoading(false)
     }
 
-    // Fetch fresh data
-    fetchCreators()
-  }, [])
+    fetchCreators(tab)
+  }, [tab])
 
-  async function fetchCreators() {
+  async function fetchCreators(currentTab) {
+    setError(null)
     try {
-      // TODO: Use backend API when endpoint is available
-      // const data = await parents.listTopCreators({ limit: 10 })
-      // setCreators(data)
-      // localStorage.setItem('top_creators', JSON.stringify(data))
+      let data
+      if (currentTab === 'week') {
+        const res = await leaderboard.getWeeklyLeaderboard()
+        data = res.results || res || []
+      } else {
+        data = await leaderboard.getLeaderboard({ limit: 10 })
+        if (data.results) data = data.results
+      }
 
-      // For now, use dummy data
-      await new Promise(resolve => setTimeout(resolve, 500)) // Simulate API delay
-      setCreators(dummyCreators)
-      localStorage.setItem('top_creators', JSON.stringify(dummyCreators))
+      if (Array.isArray(data)) {
+        setCreators(data)
+        const cacheKey = currentTab === 'week' ? 'leaderboard_weekly' : 'leaderboard_all'
+        localStorage.setItem(cacheKey, JSON.stringify(data))
+      }
     } catch (err) {
-      console.error('Failed to load creators:', err)
-      setError(err.getUserMessage ? err.getUserMessage() : 'Failed to load creators')
+      console.error('Failed to load leaderboard:', err)
+      setError(err.getUserMessage ? err.getUserMessage() : 'Failed to load leaderboard')
     } finally {
       setLoading(false)
     }
   }
 
-  // Check if we have any content to show
   const hasContent = creators.length > 0
 
-  // Loading state - only show full page loader if no content exists
   if (loading && !hasContent) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="inline-block w-8 h-8 border-4 border-brand-purple border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-gray-600">Loading creators...</p>
+          <p className="mt-4 text-gray-600">Loading leaderboard...</p>
         </div>
       </div>
     )
   }
 
-  // Error state - only show full page error if no content exists
   if (error && !hasContent) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -86,20 +78,19 @@ function TopCreatorsPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-lg mx-auto">
-      {/* Error banner - show when error occurs but content exists */}
       {error && hasContent && (
         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow-sm mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-red-500 text-2xl">⚠️</span>
               <div>
-                <h3 className="text-sm font-semibold text-red-800">Failed to refresh creators</h3>
+                <h3 className="text-sm font-semibold text-red-800">Failed to refresh leaderboard</h3>
                 <p className="text-sm text-red-700">{error}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => fetchCreators()}
+                onClick={() => fetchCreators(tab)}
                 className="px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-full hover:bg-red-600 transition-colors"
               >
                 Retry
@@ -118,7 +109,7 @@ function TopCreatorsPage() {
         </div>
       )}
       
-      <TopCreators creators={creators} />
+      <TopCreators creators={creators} tab={tab} onTabChange={setTab} />
     </div>
   )
 }

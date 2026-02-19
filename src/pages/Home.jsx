@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import FeaturedProjects from '../components/FeaturedProjects'
 import ProjectCard from '../components/ProjectCard'
+import { SkeletonHomePage, SkeletonLoadingMore } from '../components/Skeleton'
 import { projects } from '../services'
 
 const PAGE_SIZE = 20 // Load 20 projects per page
@@ -144,9 +145,10 @@ function Home() {
         console.log('  - Total count:', searchData.count)
       } else {
         // Normal flow: fetch featured + community
+        // Fetch a candidate set, then sort by reactions + comments for "most loved"
         const featuredData = await projects.listProjects({
           page: 1,
-          page_size: 3,
+          page_size: 30,
           ordering: '-total_reactions',
         })
 
@@ -156,7 +158,11 @@ function Home() {
           ordering: '-created_at',
         })
 
-        const featured = featuredData.results || []
+        const candidateResults = featuredData.results || []
+        const lovedScore = (p) => (p.total_reactions || 0) + (p.total_comments || 0)
+        const featured = [...candidateResults]
+          .sort((a, b) => lovedScore(b) - lovedScore(a))
+          .slice(0, 3)
         const community = communityData.results || []
 
         setFeaturedProjects(featured)
@@ -184,18 +190,9 @@ function Home() {
   // Check if we have any content to show
   const hasContent = featuredProjects.length > 0 || communityProjects.length > 0
 
-  // Loading state - only show full page loader if no content exists
+  // Loading state - full page skeleton when no content exists
   if (loading && !hasContent) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="inline-block w-8 h-8 border-4 border-brand-purple border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-gray-600">
-            {searchQuery ? `Searching for "${searchQuery}"...` : 'Loading projects...'}
-          </p>
-        </div>
-      </div>
-    )
+    return <SkeletonHomePage />
   }
 
   // Error state - only show full page error if no content exists
@@ -307,13 +304,8 @@ function Home() {
           )}
         </div>
 
-        {/* Loading more spinner */}
-        {loadingMore && (
-          <div className="flex items-center justify-center py-8">
-            <div className="inline-block w-8 h-8 border-4 border-brand-purple border-t-transparent rounded-full animate-spin" />
-            <span className="ml-3 text-gray-600">Loading more projects...</span>
-          </div>
-        )}
+        {/* Loading more skeleton */}
+        {loadingMore && <SkeletonLoadingMore />}
 
         {/* Intersection observer sentinel element + Manual Load Button */}
         {hasMore && !loadingMore && (
