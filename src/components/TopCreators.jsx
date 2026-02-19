@@ -107,7 +107,7 @@ function TopCreators({ creators = [], tab = 'week', onTabChange }) {
             <span className="text-xs font-bold text-gray-500 mb-1">#2</span>
             <AvatarCircle name={getName(podium[0])} size="w-12 h-12" ring="ring-2 ring-gray-300" />
             <p className="text-xs font-bold text-gray-900 mt-1 truncate w-full text-center">{getName(podium[0])}</p>
-            <Badge creator={podium[0]} />
+            {/* <Badge creator={podium[0]} /> */}
             <p className="text-sm font-bold text-gray-700 mt-0.5">❤️ {getScore(podium[0])}</p>
           </div>
 
@@ -116,7 +116,7 @@ function TopCreators({ creators = [], tab = 'week', onTabChange }) {
             <span className="text-sm">👑</span>
             <AvatarCircle name={getName(podium[1])} size="w-16 h-16" ring="ring-3 ring-brand-yellow" />
             <p className="text-sm font-bold text-gray-900 mt-1 truncate w-full text-center">{getName(podium[1])}</p>
-            <Badge creator={podium[1]} />
+            {/* <Badge creator={podium[1]} /> */}
             <p className="text-base font-bold text-gray-900 mt-0.5">🔥 {getScore(podium[1])}</p>
           </div>
 
@@ -125,7 +125,7 @@ function TopCreators({ creators = [], tab = 'week', onTabChange }) {
             <span className="text-xs font-bold text-gray-500 mb-1">#3</span>
             <AvatarCircle name={getName(podium[2])} size="w-12 h-12" ring="ring-2 ring-orange-300" />
             <p className="text-xs font-bold text-gray-900 mt-1 truncate w-full text-center">{getName(podium[2])}</p>
-            <Badge creator={podium[2]} />
+            {/* <Badge creator={podium[2]} /> */}
             <p className="text-sm font-bold text-gray-700 mt-0.5">⭐ {getScore(podium[2])}</p>
           </div>
         </div>
