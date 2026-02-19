@@ -2,44 +2,41 @@ import { useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import Header from '../components/Header'
 import TopCreators from '../components/TopCreators'
-// import { parents } from '../services'
-
-// Dummy data until backend provides top creators endpoint
-const dummyCreators = [
-  { name: 'Alice', score: 56 },
-  { name: 'Bob', score: 54 },
-  { name: 'Claire', score: 35 },
-  { name: 'David', score: 31 },
-]
+import { leaderboard } from '../services'
 
 function MainLayout() {
   const [creators, setCreators] = useState([])
+  const [tab, setTab] = useState('week')
 
   useEffect(() => {
-    // Check cache first
-    const cached = localStorage.getItem('top_creators')
+    const cacheKey = tab === 'week' ? 'leaderboard_weekly' : 'leaderboard_all'
+    const cached = localStorage.getItem(cacheKey)
 
     if (cached) {
       setCreators(JSON.parse(cached))
     }
 
-    // Fetch fresh data in background
-    fetchCreators()
-  }, [])
+    fetchCreators(tab)
+  }, [tab])
 
-  async function fetchCreators() {
+  async function fetchCreators(currentTab) {
     try {
-      // TODO: Use backend API when endpoint is available
-      // const data = await parents.listTopCreators({ limit: 10 })
-      // setCreators(data)
-      // localStorage.setItem('top_creators', JSON.stringify(data))
+      let data
+      if (currentTab === 'week') {
+        const res = await leaderboard.getWeeklyLeaderboard()
+        data = res.results || res || []
+      } else {
+        data = await leaderboard.getLeaderboard({ limit: 20 })
+        if (data.results) data = data.results
+      }
 
-      // For now, use dummy data
-      await new Promise(resolve => setTimeout(resolve, 300))
-      setCreators(dummyCreators)
-      localStorage.setItem('top_creators', JSON.stringify(dummyCreators))
+      if (Array.isArray(data)) {
+        setCreators(data)
+        const cacheKey = currentTab === 'week' ? 'leaderboard_weekly' : 'leaderboard_all'
+        localStorage.setItem(cacheKey, JSON.stringify(data))
+      }
     } catch (err) {
-      console.error('Failed to load creators:', err)
+      console.error('Failed to load leaderboard:', err)
     }
   }
 
@@ -49,13 +46,13 @@ function MainLayout() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Scrollable main content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="custom-scrollbar flex-1 overflow-y-auto">
           <Outlet />
         </div>
 
         {/* Fixed right sidebar — desktop only, never scrolls */}
         <div className="hidden lg:flex">
-          <TopCreators creators={creators} />
+          <TopCreators creators={creators} tab={tab} onTabChange={setTab} />
         </div>
       </div>
     </div>

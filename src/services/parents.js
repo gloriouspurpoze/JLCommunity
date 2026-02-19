@@ -81,17 +81,9 @@ export async function getParentProfile(parentUuid) {
 }
 
 /**
- * List top creators (leaderboard)
- * NOTE: This endpoint doesn't exist in current API docs
- * Add to backend: GET /parents/top-creators/?limit=10
- * @param {Object} params
- * @param {number} [params.limit] - Number of creators to fetch (default: 10)
- * @returns {Promise<Array<{uuid, name, total_projects, total_reactions}>>}
+ * @deprecated Use leaderboard service instead: import { leaderboard } from '../services'
  */
 export async function listTopCreators(params = {}) {
-  // TODO: Implement when backend endpoint is ready
-  // return api.get('/parents/top-creators/', { params })
-  
-  // For now, throw error indicating endpoint not available
-  throw new Error('Top creators endpoint not yet implemented in backend API')
+  const { getLeaderboard } = await import('./leaderboard')
+  return getLeaderboard(params)
 }

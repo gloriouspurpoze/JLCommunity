@@ -7,7 +7,8 @@
 > Replace `{{JWT_TOKEN}}` with the token returned from Create Parent.  
 > Replace `{{REACTION_UUID}}` with the UUID returned from Create Reaction.  
 > Replace `{{PARENT_UUID}}` with the UUID returned from Create Parent.  
-> Replace `{{COMMENT_ID}}` with the ID returned from Create Comment.
+> Replace `{{COMMENT_ID}}` with the ID returned from Create Comment.  
+> Replace `{{LEARNER_UID}}` with a learner_uid from the leaderboard or project response.
 
 ---
 
@@ -166,6 +167,50 @@ Invoke-RestMethod -Uri "http://localhost:8000/projects/learn-request/" -Method P
 
 ---
 
+## 13. Leaderboard — Top Creators (Live)
+
+> Stats are refreshed daily via cron. Data may be up to ~24 hours old.
+
+```powershell
+# Top 20 creators (default)
+Invoke-RestMethod -Uri "http://localhost:8000/projects/leaderboard/" -Method GET
+
+# Top 10
+Invoke-RestMethod -Uri "http://localhost:8000/projects/leaderboard/?limit=10" -Method GET
+
+# Filter by course
+Invoke-RestMethod -Uri "http://localhost:8000/projects/leaderboard/?course_name=Game%20Development" -Method GET
+
+# Combined: top 5 for a specific course
+Invoke-RestMethod -Uri "http://localhost:8000/projects/leaderboard/?course_name=Web%20Development&limit=5" -Method GET
+```
+
+---
+
+## 14. Weekly Leaderboard (Frozen Snapshot)
+
+> Generated once a week via cron. Immutable historical record.
+
+```powershell
+# Current week
+Invoke-RestMethod -Uri "http://localhost:8000/projects/leaderboard/weekly/" -Method GET
+
+# Specific past week (use a Monday date)
+Invoke-RestMethod -Uri "http://localhost:8000/projects/leaderboard/weekly/?week_start=2026-02-16" -Method GET
+```
+
+---
+
+## 15. Learner Stats Detail
+
+> Individual learner stats with rank — for profile / project pages.
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/projects/leaderboard/{{LEARNER_UID}}/" -Method GET
+```
+
+---
+
 ## Recommended Test Flow (Step by Step)
 
 ```
@@ -181,6 +226,9 @@ Step 9:  GET  /projects/{id}/                     -> See updated counts + commen
 Step 10: POST /projects/learn-request/            -> Without JWT -> get redirect URL
 Step 11: POST /projects/learn-request/            -> With JWT -> get confirmation
 Step 12: GET  /projects/parents/{uuid}/           -> View your profile
+Step 13: GET  /projects/leaderboard/              -> See top creators leaderboard
+Step 14: GET  /projects/leaderboard/weekly/        -> See this week's frozen snapshot
+Step 15: GET  /projects/leaderboard/{learner_uid}/ -> Check a specific learner's stats
 ```
 
 ---
@@ -207,4 +255,16 @@ Invoke-RestMethod -Uri "http://localhost:8000/projects/999999/" -Method GET
 # Parent with no email or phone
 Invoke-RestMethod -Uri "http://localhost:8000/projects/parents/" -Method POST -ContentType "application/json" -Body '{"name": "TestKid"}'
 # -> 400: Either email or phone_number is required
+
+# Non-existent learner stats
+Invoke-RestMethod -Uri "http://localhost:8000/projects/leaderboard/nonexistent-uid-123/" -Method GET
+# -> 404: No stats found for this learner
+
+# Invalid week_start format
+Invoke-RestMethod -Uri "http://localhost:8000/projects/leaderboard/weekly/?week_start=not-a-date" -Method GET
+# -> 400: week_start must be YYYY-MM-DD
+
+# Weekly leaderboard for a week with no snapshot
+Invoke-RestMethod -Uri "http://localhost:8000/projects/leaderboard/weekly/?week_start=2020-01-06" -Method GET
+# -> 200: { count: 0, results: [], message: "No leaderboard generated for this week yet." }
 ```

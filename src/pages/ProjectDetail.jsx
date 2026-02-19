@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import ReactionBar from '../components/ReactionBar'
+import {
+  SkeletonProjectPage,
+  SkeletonProjectDetailContent,
+  SkeletonProjectSidebar,
+} from '../components/Skeleton'
 import { projects, comments, parents, auth, learnRequests } from '../services'
 import { getDriveThumbnail, getDriveEmbedUrl } from '../utils/thumbnails'
 
@@ -61,6 +66,7 @@ function ProjectDetail() {
   const [learnRequestUsername, setLearnRequestUsername] = useState('')
   const [isSubmittingLearnRequest, setIsSubmittingLearnRequest] = useState(false)
   const [lastSubmittedLearnRequest, setLastSubmittedLearnRequest] = useState(null)
+  const [showContentSkeleton, setShowContentSkeleton] = useState(false)
 
   // Predefined comment options
   const predefinedComments = [
@@ -84,6 +90,16 @@ function ProjectDetail() {
       window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }, [id])
+
+  // When id changes (e.g. related video clicked), show skeleton immediately until new project is loaded
+  useEffect(() => {
+    setShowContentSkeleton(true)
+  }, [id])
+  useEffect(() => {
+    if (project && String(project.id) === String(id) && !loading) {
+      setShowContentSkeleton(false)
+    }
+  }, [project, loading, id])
 
   // Fetch project data with cache
   useEffect(() => {
@@ -407,16 +423,9 @@ function ProjectDetail() {
     }
   }
 
-  // Loading state - only show full page loader if no project data exists
+  // Loading state - full page skeleton when no project data exists
   if (loading && !project) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="inline-block w-12 h-12 border-4 border-brand-purple border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-gray-500">Loading project...</span>
-        </div>
-      </div>
-    )
+    return <SkeletonProjectPage />
   }
 
   // Error state - only show full page error if no project data exists
@@ -479,7 +488,13 @@ function ProjectDetail() {
         )}
 
         <div className="flex flex-col lg:flex-row gap-6">
-          
+          {showContentSkeleton ? (
+            <>
+              <SkeletonProjectDetailContent />
+              <SkeletonProjectSidebar />
+            </>
+          ) : (
+          <>
           {/* ── Main Content Column ── */}
           <div className="flex-1 min-w-0">
             
@@ -965,6 +980,8 @@ function ProjectDetail() {
                </Link>
             </div>
           </aside>
+          </>
+          )}
         </div>
       </div>
 
