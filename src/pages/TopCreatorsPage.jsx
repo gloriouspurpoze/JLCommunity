@@ -6,7 +6,7 @@ function TopCreatorsPage() {
   const [creators, setCreators] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [tab, setTab] = useState('week')
+  const [tab, setTab] = useState('all')
 
   useEffect(() => {
     const cacheKey = tab === 'week' ? 'leaderboard_weekly' : 'leaderboard_all'

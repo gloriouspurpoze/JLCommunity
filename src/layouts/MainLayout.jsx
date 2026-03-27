@@ -6,7 +6,7 @@ import { leaderboard } from '../services'
 
 function MainLayout() {
   const [creators, setCreators] = useState([])
-  const [tab, setTab] = useState('week')
+  const [tab, setTab] = useState('all')
 
   useEffect(() => {
     const cacheKey = tab === 'week' ? 'leaderboard_weekly' : 'leaderboard_all'
